@@ -8,7 +8,8 @@ class NeuralNetwork(torch.nn.Module):
     """
     Neural Network model
     """
-    def __init__(self, dim_state, dynamical_system_order, n_primitives, multi_motion, latent_space_dim, neurons_hidden_layers):
+    def __init__(self, dim_state, dynamical_system_order, n_primitives, multi_motion, latent_gain_lower_limit,
+                 latent_gain_upper_limit, latent_gain, latent_space_dim, neurons_hidden_layers, adaptive_gains):
         super(NeuralNetwork, self).__init__()
         
         # Initialize Network parameters
@@ -19,6 +20,10 @@ class NeuralNetwork(torch.nn.Module):
         self.n_primitives = n_primitives
         self.latent_space_dim = latent_space_dim
         self.dynamical_system_order = dynamical_system_order
+        self.latent_gain = latent_gain
+        self.latent_gain_lower_limit = latent_gain_lower_limit
+        self.latent_gain_upper_limit = latent_gain_upper_limit
+        self.adaptive_gains = adaptive_gains
 
         # Select activation function
         self.activation = torch.nn.GELU()
@@ -143,3 +148,39 @@ class NeuralNetwork(torch.nn.Module):
         # Decoder dx layer 3
         de_3 = self.decoder3_dx(de_2)
         return de_3
+
+    def gains_latent_dynamical_system(self, y_t_norm):
+        """
+        Computes gains latent dynamical system f^{L}
+        """
+        if self.adaptive_gains:
+            input = y_t_norm
+            latent_gain_1 = self.activation(self.norm_gain_1(self.gain_nn_1(input)))
+            gains = self.sigmoid(self.gain_nn_2(latent_gain_1))
+
+            # Keep gains between the set limits
+            gains = gains * (self.latent_gain_upper_limit - self.latent_gain_lower_limit) + self.latent_gain_lower_limit
+        else:
+            gains = self.latent_gain
+        return gains
+
+    def latent_dynamical_system(self, y_t, primitive_type):
+        """
+        Stable latent dynamical system
+        """
+        if primitive_type.ndim > 1:  # if primitive is already encoded, decode TODO: this should be modified to work with changing goal position
+            primitive_type = torch.argmax(primitive_type, dim=1)  # one hot encoding to integers
+
+        # Get latent goals batch
+        y_goal = self.get_goals_latent_space_batch(primitive_type)
+
+        # Normalize y_t
+        y_t_norm = self.norm_latent_gain_input(y_t)
+
+        # Get gain latent dynamical system
+        alpha = self.gains_latent_dynamical_system(y_t_norm)
+
+        # First order dynamical system in latent space
+        dy_t = alpha * (y_goal.cuda() - y_t.cuda())
+
+        return dy_t

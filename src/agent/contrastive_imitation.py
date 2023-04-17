@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from agent.neural_network import NeuralNetwork
-from agent.utils.ranking_losses import TripletLoss, TripletAngleLoss, TripletCosineLoss, SoftTripletLoss
+from agent.utils.ranking_losses import ContrastiveLoss, TripletLoss, TripletAngleLoss, TripletCosineLoss, SoftTripletLoss
 from agent.dynamical_system import DynamicalSystem
 from agent.utils.dynamical_system_operations import normalize_state
 
@@ -24,6 +24,7 @@ class ContrastiveImitation:
         self.batch_size = params.batch_size
         self.save_path = params.results_path
         self.multi_motion = params.multi_motion
+        self.stabilization_loss = params.stabilization_loss
         self.generalization_window_size = params.stabilization_window_size
         self.imitation_loss_weight = params.imitation_loss_weight
         self.stabilization_loss_weight = params.stabilization_loss_weight
@@ -68,14 +69,19 @@ class ContrastiveImitation:
             raise ValueError('triplet type not valid, options: euclidean, spherical.')
         #self.triplet_loss = TripletCosineLoss(margin=params.triplet_margin)
         #self.triplet_loss = SoftTripletLoss()
+        self.contrastive_loss = ContrastiveLoss(margin=params.contrastive_margin)
 
         # Initialize Neural Network
         self.model = NeuralNetwork(dim_state=self.dim_state,
                                    dynamical_system_order=self.dynamical_system_order,
                                    n_primitives=self.n_primitives,
                                    multi_motion=self.multi_motion,
+                                   latent_gain_lower_limit=params.latent_gain_lower_limit,
+                                   latent_gain_upper_limit=params.latent_gain_upper_limit,
+                                   latent_gain=params.latent_gain,
                                    latent_space_dim=params.latent_space_dim,
-                                   neurons_hidden_layers=params.neurons_hidden_layers).cuda()
+                                   neurons_hidden_layers=params.neurons_hidden_layers,
+                                   adaptive_gains=params.adaptive_gains).cuda()
 
         # Initialize optimizer
         self.optimizer = torch.optim.AdamW(self.model.parameters(),
@@ -146,86 +152,42 @@ class ContrastiveImitation:
         dynamical_system_task = self.init_dynamical_system(initial_states=state_sample,
                                                            primitive_type=primitive_type_sample)
 
+        dynamical_system_latent = self.init_dynamical_system(initial_states=state_sample,
+                                                             primitive_type=primitive_type_sample)
+
         # Compute cost over trajectory
         contrastive_matching_cost = 0
+        batch_size = state_sample.shape[0]
         y_t_task = None
 
         for i in range(self.generalization_window_size):
             # Do transition
             y_t_task_prev = y_t_task
-            y_t_task = dynamical_system_task.transition()['latent state']
+            y_t_task = dynamical_system_task.transition(space='task')['latent state']
+            _, y_t_latent = dynamical_system_latent.transition_latent_system()
 
             if i > 0:  # we need at least one iteration to have a previous point to push the current one away from
                 # Transition matching cost
-                y_goal = self.model.get_goals_latent_space_batch(primitive_type_sample)
-                contrastive_matching_cost += self.triplet_loss(y_goal, y_t_task, y_t_task_prev)
+                if self.stabilization_loss == 'contrastive':
+                    # Anchor
+                    anchor_samples = torch.cat((y_t_task, y_t_task))
 
+                    # Positive/Negative samples
+                    contrastive_samples = torch.cat((y_t_latent, y_t_task_prev))
+
+                    # Contrastive label
+                    contrastive_label_pos = torch.ones(batch_size).cuda()
+                    contrastive_label_neg = torch.zeros(batch_size).cuda()
+                    contrastive_label = torch.cat((contrastive_label_pos, contrastive_label_neg))
+
+                    # Compute cost
+                    contrastive_matching_cost += self.contrastive_loss(anchor_samples, contrastive_samples, contrastive_label)
+
+                elif self.stabilization_loss == 'triplet':
+                    contrastive_matching_cost += self.triplet_loss(y_t_task, y_t_latent, y_t_task_prev)
         contrastive_matching_cost = contrastive_matching_cost / (self.generalization_window_size - 1)
 
         return contrastive_matching_cost * self.stabilization_loss_weight
-
-    def boundary_constrain(self, state_sample, primitive_type_sample):
-        # Force states to start at the boundary
-        selected_axis = torch.randint(low=0, high=self.dim_state, size=[self.batch_size])
-        selected_limit = torch.randint(low=0, high=2, size=[self.batch_size])
-        limit_options = torch.FloatTensor([-1, 1])
-        limits = limit_options[selected_limit]
-        replaced_samples = torch.arange(start=0, end=self.batch_size)
-        state_sample[replaced_samples, selected_axis] = limits.cuda()
-
-        # Create dynamical systems
-        self.params_dynamical_system['saturate transition'] = False
-        dynamical_system = self.init_dynamical_system(initial_states=state_sample,
-                                                      primitive_type=primitive_type_sample)
-        self.params_dynamical_system['saturate transition'] = True
-
-        # Do one transition at the boundary and get velocity
-        transition_info = dynamical_system.transition()
-        x_t_d = transition_info['desired state']
-        dx_t_d = transition_info['desired velocity']
-
-        # Iterate through every dimension
-        epsilon = 5e-2
-        loss = 0
-        if self.space == 'sphere':
-            return 0
-        elif self.space == 'euclidean_sphere':
-            states_boundary = 3 * self.dynamical_system_order
-        else:
-            states_boundary = self.dim_space
-
-        for i in range(states_boundary):
-            distance_upper = torch.abs(x_t_d[:, i] - 1)
-            distance_lower = torch.abs(x_t_d[:, i] + 1)
-
-            # Get velocities for points in the boundary
-            dx_axis_upper = dx_t_d[distance_upper < epsilon]
-            dx_axis_lower = dx_t_d[distance_lower < epsilon]
-
-            # Compute normal vectors for lower and upper limits
-            normal_upper = torch.zeros(dx_axis_upper.shape).cuda()
-            normal_upper[:, i] = 1
-            normal_lower = torch.zeros(dx_axis_lower.shape).cuda()
-            normal_lower[:, i] = -1
-
-            # Compute dot product between boundary velocities and normal vectors
-            dot_product_upper = torch.bmm(dx_axis_upper.view(-1, 1, self.dim_space),
-                                          normal_upper.view(-1, self.dim_space, 1)).reshape(-1)
-
-            dot_product_lower = torch.bmm(dx_axis_lower.view(-1, 1, self.dim_space),
-                                          normal_lower.view(-1, self.dim_space, 1)).reshape(-1)
-
-            # Concat with zero in case no points sampled in boundaries, to avoid nans
-            dot_product_upper = torch.cat([dot_product_upper, torch.zeros(1).cuda()])
-            dot_product_lower = torch.cat([dot_product_lower, torch.zeros(1).cuda()])
-
-            # Compute losses
-            loss += F.relu(dot_product_upper).mean()
-            loss += F.relu(dot_product_lower).mean()
-
-        loss = loss / (2 * self.dim_space)
-
-        return loss * self.boundary_loss_weight
 
     def demo_sample(self):
         """

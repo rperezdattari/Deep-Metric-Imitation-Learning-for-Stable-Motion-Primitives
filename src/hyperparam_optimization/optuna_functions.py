@@ -10,7 +10,8 @@ def optuna_generate_optimizers(trial, params):
     if params.stabilization_loss_weight > 0:
         params.stabilization_loss_weight = trial.suggest_float('stabilization loss weight', low=1e-1, high=10, log=False)
         params.stabilization_window_size = trial.suggest_int('stabilization window size', low=2, high=15)
-        params.triplet_margin = trial.suggest_float('triplet margin', low=1e-9, high=1e-1, log=True)
+        params.contrastive_margin = trial.suggest_float('contrastive_margin', low=1e-8, high=1e-1, log=True)
+        params.latent_gain_upper_limit = trial.suggest_float('latent gain upper limit', low=1e-3, high=10, log=False)
     if params.boundary_loss_weight > 0:
         params.boundary_loss_weight = trial.suggest_float('boundary loss weight', low=1e-2, high=10, log=False)
     return params

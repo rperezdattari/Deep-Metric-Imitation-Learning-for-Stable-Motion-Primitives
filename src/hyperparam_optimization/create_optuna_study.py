@@ -49,7 +49,8 @@ if task == 'optimize':  # add initial guess of parameters of hyperparameter opti
     if params.stabilization_loss_weight > 0:
         initial_guess.update({'stabilization loss weight': params.stabilization_loss_weight,
                               'stabilization window size': params.stabilization_window_size,
-                              'triplet margin': params.triplet_margin})
+                              'contrastive_margin': params.contrastive_margin,
+                              'latent gain upper limit': params.latent_gain_upper_limit})
 
     if params.boundary_loss_weight > 0:
         initial_guess.update({'boundary loss weight': params.boundary_loss_weight})

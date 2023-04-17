@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class Params:
     """ General parameters """
     dataset_name: str = 'LAIR'  # options: LASA, LAIR, optitrack, interpolation, joint_space
-    results_path: str = 'results/2nd_order_2D/'
+    results_path: str = 'results/2nd_order_2D_condor/'
     multi_motion: bool = False  # true when learning multiple motions together
     selected_primitives_ids: str = '3'  # id number from dataset_keys.py, e.g., '2' or '4,0,6'
     manifold_dimensions: int = 2  # dimensionality of the data
@@ -30,7 +30,7 @@ class Params:
     triplet_type: str = 'spherical'  # distance metric used in triplet loss
     imitation_loss_weight: float = 1  # imitation loss weight
     stabilization_loss_weight: float = 4.96810  # 1  # stability loss weight
-    boundary_loss_weight: float = 1.0670  # 1  # boundary loss weight
+    boundary_loss_weight: float = 0.0 # 1  # boundary loss weight
     imitation_window_size: int = 15  # 15  # imitation window size
     stabilization_window_size: int = 12  # 2  # stability window size
     triplet_margin: float = 1.227e-05  # 4.523e-9  # 1.25e-4  # triplet loss margin

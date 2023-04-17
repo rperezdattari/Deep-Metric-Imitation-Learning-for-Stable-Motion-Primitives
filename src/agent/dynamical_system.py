@@ -40,7 +40,38 @@ class DynamicalSystem():
 
         # Init dynamical system state
         self.x_t_d = x_init
-        self.hist_y_t = []
+        self.y_t_d = self.get_latent_state(x_init)
+
+    def get_latent_state(self, x_t=None, space='task'):
+        """
+        Obtains current latent state by either mapping task state or from previous latent system transition
+        """
+        if space == 'task':
+            # Map state to latent state (psi)
+            y_t = self.model.encoder(x_t, self.primitive_type)
+        elif space == 'latent':
+            # Transition following f^{L}
+            _, y_t = self.transition_latent_system()
+        else:
+            raise ValueError('Selected transition space not valid, options: task, latent.')
+
+        return y_t
+
+    def transition_latent_system(self, y_t=None):
+        """
+        Computes one-step transition in latent space
+        """
+        # If no state provided, assume perfect transition from previous desired state
+        if y_t is None:
+            y_t = self.y_t_d
+
+        # Get derivative
+        dy_t_d = self.model.latent_dynamical_system(y_t, self.primitive_type)
+
+        # Integrate
+        self.y_t_d = euler_integration(y_t, dy_t_d, self.delta_t)
+
+        return self.y_t_d, y_t
 
     def map_points_to_sphere(self, x_t):
         """
@@ -124,7 +155,7 @@ class DynamicalSystem():
 
         return x_t_d, vel_t_d
 
-    def transition(self, x_t=None, **kwargs):
+    def transition(self, x_t=None, space='task', **kwargs):
         """
         Computes dynamical system one-step transition
         """
@@ -133,7 +164,7 @@ class DynamicalSystem():
             x_t = self.x_t_d
 
         # Map task state to latent state (psi)
-        y_t = self.model.encoder(x_t, self.primitive_type)
+        y_t = self.get_latent_state(x_t, space)
 
         # Map latent state to task state derivative (vel/acc) (phi)
         dx_t_d = self.map_to_velocity(y_t)

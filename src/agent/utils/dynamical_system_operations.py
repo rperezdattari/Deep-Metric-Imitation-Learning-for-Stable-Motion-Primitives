@@ -12,14 +12,6 @@ def normalize_state(state, x_min, x_max):
     return state
 
 
-# def normalize_state(state, x_min, x_max):
-#     """
-#     Normalize state dummy
-#     """
-#
-#     return state
-
-
 def get_derivative_normalized_state(dx, x_min, x_max):
     """
     Computes derivative of normalized state from derivative of unnormalized state
@@ -34,14 +26,6 @@ def denormalize_state(state, x_min, x_max):
     """
     state = ((state / 2) + 0.5) * (x_max - x_min) + x_min
     return state
-
-
-# def denormalize_state(state, x_min, x_max):
-#     """
-#     Denormalize state dummy
-#     """
-#
-#     return state
 
 
 def denormalize_dx(dx_t, max_state_derivative):
