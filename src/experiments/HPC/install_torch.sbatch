@@ -20,7 +20,7 @@
 #SBATCH --cpus-per-task=4
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem=4000
+#SBATCH --mem=10000
 
 # Add GPU
 #SBATCH --gres=gpu
