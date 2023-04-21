@@ -2,6 +2,7 @@ import torch
 #torch.autograd.set_detect_anomaly(True)
 #torch.manual_seed(0)
 import numpy as np
+from agent.utils.torch_rbf import RBF
 
 
 class NeuralNetwork(torch.nn.Module):
@@ -37,24 +38,28 @@ class NeuralNetwork(torch.nn.Module):
 
         # Initialize encoder layers: psi
         if multi_motion:
-            self.encoder1 = torch.nn.Linear(self.n_input + n_primitives, neurons_hidden_layers)
+            self.encoder1_rbf = RBF(self.n_input + n_primitives, neurons_hidden_layers)
+            self.encoder1 = torch.nn.Linear(neurons_hidden_layers, latent_input_size)
         else:
-            self.encoder1 = torch.nn.Linear(self.n_input, neurons_hidden_layers)
-        self.norm_e_1 = torch.nn.LayerNorm(neurons_hidden_layers)
-        self.encoder2 = torch.nn.Linear(neurons_hidden_layers, neurons_hidden_layers)
-        self.norm_e_2 = torch.nn.LayerNorm(neurons_hidden_layers)
-        self.encoder3 = torch.nn.Linear(neurons_hidden_layers, neurons_hidden_layers)
-        self.norm_e_3 = torch.nn.LayerNorm(neurons_hidden_layers)
+            self.encoder1_rbf = RBF(self.n_input, neurons_hidden_layers)
+            self.encoder1 = torch.nn.Linear(neurons_hidden_layers, latent_input_size)
+        # self.norm_e_1 = torch.nn.LayerNorm(neurons_hidden_layers)
+        # self.encoder2_rbf = RBF(neurons_hidden_layers, neurons_hidden_layers)
+        # self.encoder2 = torch.nn.Linear(neurons_hidden_layers, neurons_hidden_layers)
+        # self.norm_e_2 = torch.nn.LayerNorm(neurons_hidden_layers)
+        # self.encoder3 = torch.nn.Linear(neurons_hidden_layers, neurons_hidden_layers)
+        # self.norm_e_3 = torch.nn.LayerNorm(neurons_hidden_layers)
 
         # Norm output latent space
-        self.norm_latent = torch.nn.LayerNorm(latent_input_size)
+        #self.norm_latent = torch.nn.LayerNorm(latent_input_size)
 
         # Initialize dynamical system decoder layers: phi
-        self.decoder1_dx = torch.nn.Linear(latent_input_size, neurons_hidden_layers)
-        self.norm_de_dx1 = torch.nn.LayerNorm(neurons_hidden_layers)
-        self.decoder2_dx = torch.nn.Linear(neurons_hidden_layers, neurons_hidden_layers)
-        self.norm_de_dx2 = torch.nn.LayerNorm(neurons_hidden_layers)
-        self.decoder3_dx = torch.nn.Linear(neurons_hidden_layers, n_output)
+        self.decoder1_dx_rbf = RBF(latent_input_size, neurons_hidden_layers)
+        self.decoder1_dx = torch.nn.Linear(neurons_hidden_layers, n_output)
+        # self.norm_de_dx1 = torch.nn.LayerNorm(neurons_hidden_layers)
+        # self.decoder2_dx = torch.nn.Linear(neurons_hidden_layers, neurons_hidden_layers)
+        # self.norm_de_dx2 = torch.nn.LayerNorm(neurons_hidden_layers)
+        # self.decoder3_dx = torch.nn.Linear(neurons_hidden_layers, n_output)
 
         # Latent space
         self.gain_nn_1 = torch.nn.Linear(latent_input_size, self.latent_space_dim)
@@ -65,11 +70,11 @@ class NeuralNetwork(torch.nn.Module):
 
         self.norm_de_dx0 = []
         for i in range(self.dynamical_system_order):
-            self.norm_de_dx0.append(torch.nn.LayerNorm(self.latent_space_dim))
+            self.norm_de_dx0.append(torch.nn.LayerNorm(latent_input_size))
 
         self.norm_de_dx0 = torch.nn.ModuleList(self.norm_de_dx0)
-        self.norm_de_dx0_0 = torch.nn.LayerNorm(self.latent_space_dim)
-        self.norm_de_dx0_1 = torch.nn.LayerNorm(self.latent_space_dim)
+        self.norm_de_dx0_0 = torch.nn.LayerNorm(latent_input_size)
+        self.norm_de_dx0_1 = torch.nn.LayerNorm(latent_input_size)
 
     def update_goals_latent_space(self, goals):
         """
@@ -121,33 +126,34 @@ class NeuralNetwork(torch.nn.Module):
         # Encoder layer 1
         if self.multi_motion:
             input_encoded = torch.cat((x_t.cuda(), encoding), dim=1)
-            e_1 = self.activation(self.norm_e_1(self.encoder1(input_encoded)))
+            e_1 = self.encoder1(self.encoder1_rbf(input_encoded))
         else:
-            e_1 = self.activation(self.norm_e_1(self.encoder1(x_t.cuda())))
+            e_1 = self.encoder1(self.encoder1_rbf(x_t.cuda()))
 
-        # Encoder layer 2
-        e_2 = self.activation(self.norm_e_2(self.encoder2(e_1)))
-
-        # Encoder layer 3
-        e_3 = self.activation(self.encoder3(e_2))
-        return e_3
+        # # Encoder layer 2
+        # e_2 = self.activation(self.norm_e_2(self.encoder2(e_1)))
+        #
+        # # Encoder layer 3
+        # e_3 = self.activation(self.encoder3(e_2))
+        return e_1
 
     def decoder_dx(self, y_t):
         """
         Maps latent space state to task space derivative (phi)
         """
+        return y_t
         # Normalize y_t
-        y_t_norm = self.norm_de_dx0[0](y_t)
+        y_t_norm = self.norm_de_dx0_0(y_t)
 
         # Decoder dx layer 1
-        de_1 = self.activation(self.norm_de_dx1(self.decoder1_dx(y_t_norm)))
+        de_1 = self.decoder1_dx(self.decoder1_dx_rbf(y_t_norm))
 
-        # Decoder dx layer 2
-        de_2 = self.activation(self.norm_de_dx2(self.decoder2_dx(de_1)))
-
-        # Decoder dx layer 3
-        de_3 = self.decoder3_dx(de_2)
-        return de_3
+        # # Decoder dx layer 2
+        # de_2 = self.activation(self.norm_de_dx2(self.decoder2_dx(de_1)))
+        #
+        # # Decoder dx layer 3
+        # de_3 = self.decoder3_dx(de_2)
+        return de_1
 
     def gains_latent_dynamical_system(self, y_t_norm):
         """
