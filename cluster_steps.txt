@@ -74,3 +74,6 @@ module load 2022r2 openmpi py-torch
 
 # cancel all jobs
 squeue -u $USER | awk '{print $1}' | tail -n+2 | xargs scancel
+
+# conda
+conda activate /tudelft.net/staff-umbrella/condorstorage/software/condor

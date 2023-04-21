@@ -7,10 +7,10 @@
 #SBATCH --partition=general
 
 # The default Quality of Service is the 'short' QoS (maximum run time: 4 hours)
-#SBATCH --qos=long
+#SBATCH --qos=short
 
 # The default run (wall-clock) time is 1 minute
-#SBATCH --time=24:00:00
+#SBATCH --time=1:00:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
@@ -20,7 +20,7 @@
 #SBATCH --cpus-per-task=4
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem=10000
+#SBATCH --mem=4000
 
 # Add GPU
 #SBATCH --gres=gpu
@@ -32,21 +32,9 @@
 # Use this simple command to check that your sbatch settings are working
 /usr/bin/scontrol show job -d "$SLURM_JOB_ID"
 
-# Measure GPU usage of your job (initialization)
-previous=$(/usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/tail -n '+2')
-
-# Use this simple command to check that your sbatch settings are working (it should show the GPU that you requested)
-/usr/bin/nvidia-smi
-
 # Uncomment these lines when your job requires this software
 module use /opt/insy/modulefiles
 module load miniconda/3.8
 module load cuda/11.6
-
-module load cuda/11.2 cudnn/11.2-8.1.1.33
-export PYTHONPATH=$PYTHONPATH:/home/nfs/rperezdattari/pcgrad
-
-srun python3 run_optuna.py --params 1st_order_2D_condor --train-dataset True --results-base-directory /tudelft.net/staff-umbrella/condorstorage/riemannian/
-
-# Measure GPU usage of your job (result)
-/usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/grep -v -F "$previous"
+conda activate /tudelft.net/staff-umbrella/condorstorage/software/condor
+pip install torch==1.12.0+cu116 torchvision==0.13.0+cu116 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu116
