@@ -24,7 +24,7 @@ class Params:
     neurons_hidden_layers: int = 300  # number of neurons per layer
     batch_size: int = 250  # sampling batch size
     learning_rate: float = 0.00059  # AdamW learning rate
-    weight_decay: float = 0.000  # AdamW weight decay
+    weight_decay: float = 0.0001  # AdamW weight decay
 
     """ Contrastive Imitation """
     triplet_type: str = 'spherical'  # distance metric used in triplet loss
