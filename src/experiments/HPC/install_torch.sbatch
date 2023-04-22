@@ -36,6 +36,8 @@
 module use /opt/insy/modulefiles
 module load miniconda/3.8
 module load cuda/11.6
+source activate
 conda activate /tudelft.net/staff-umbrella/condorstorage/software/condor
-export PIP_CACHE_DIR=/tudelft.net/staff-umbrella/condorstorage/software/
+#export PIP_CACHE_DIR=/tudelft.net/staff-umbrella/condorstorage/software/
+conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit=11.6 -c pytorch -c conda-forge
 TMPDIR=/tudelft.net/staff-umbrella/condorstorage/software/ pip install torch==1.12.0+cu116 torchvision==0.13.0+cu116 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu116 --target /tudelft.net/staff-umbrella/condorstorage/software/

@@ -41,12 +41,11 @@ previous=$(/usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utili
 # Uncomment these lines when your job requires this software
 module use /opt/insy/modulefiles
 module load miniconda/3.8
-module load cuda/11.6
+#module load cuda/11.6
+source activate
+conda activate /tudelft.net/staff-umbrella/condorstorage/software/condor
 
-module load cuda/11.2 cudnn/11.2-8.1.1.33
-export PYTHONPATH=$PYTHONPATH:/home/nfs/rperezdattari/pcgrad
-
-srun python3 run_optuna.py --params 1st_order_2D_condor --train-dataset True --results-base-directory /tudelft.net/staff-umbrella/condorstorage/riemannian/
+srun python run_optuna.py --params 1st_order_2D_condor --train-dataset True --results-base-directory /tudelft.net/staff-umbrella/condorstorage/riemannian/
 
 # Measure GPU usage of your job (result)
 /usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/grep -v -F "$previous"
