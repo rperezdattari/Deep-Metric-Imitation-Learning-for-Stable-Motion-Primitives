@@ -163,11 +163,12 @@ class ContrastiveImitation:
         # Compute cost over trajectory
         contrastive_matching_cost = 0
         batch_size = state_sample.shape[0]
-        y_t_task = None
+        #y_t_task = None
 
         for i in range(self.generalization_window_size):
             # Do transition
-            y_t_task_prev = y_t_task
+            y_t_task_prev = dynamical_system_task.y_t['task']#y_t_task
+            #y_t_task_prev = y_t_task
             y_t_task = dynamical_system_task.transition(space='task')['latent state']
             _, y_t_latent = dynamical_system_latent.transition_latent_system()
 
