@@ -44,8 +44,8 @@ class RBF(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.uniform_(self.centres, -1, 1)
-        nn.init.constant_(self.log_sigmas, 0.0001)
+        nn.init.uniform_(self.centres, -1.1, 1.1)
+        nn.init.constant_(self.log_sigmas, 0.1)
 
     def forward(self, input):
         size = (input.size(0), self.out_features, self.in_features)

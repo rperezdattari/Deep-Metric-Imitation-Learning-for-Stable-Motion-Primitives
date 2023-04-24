@@ -141,12 +141,12 @@ class NeuralNetwork(torch.nn.Module):
         """
         Maps latent space state to task space derivative (phi)
         """
-        return y_t
+
         # Normalize y_t
-        y_t_norm = self.norm_de_dx0_0(y_t)
+        #y_t_norm = self.norm_de_dx0_0(y_t)
 
         # Decoder dx layer 1
-        de_1 = self.decoder1_dx(self.decoder1_dx_rbf(y_t_norm))
+        de_1 = self.decoder1_dx(self.decoder1_dx_rbf(y_t))
 
         # # Decoder dx layer 2
         # de_2 = self.activation(self.norm_de_dx2(self.decoder2_dx(de_1)))

@@ -20,16 +20,16 @@ class Params:
     latent_gain: float = 0.008  # value of gains when fixed
 
     """ Neural Network """
-    latent_space_dim: int = 2  # dimensionality latent space
-    neurons_hidden_layers: int = 300  # number of neurons per layer
+    latent_space_dim: int = 10  # dimensionality latent space
+    neurons_hidden_layers: int = 1000  # number of neurons per layer
     batch_size: int = 250  # sampling batch size
-    learning_rate: float = 1e-3  # 0.00059  # AdamW learning rate
+    learning_rate: float = 1e-4  # 0.00059  # AdamW learning rate
     weight_decay: float = 0.000  # AdamW weight decay
 
     """ Contrastive Imitation """
     triplet_type: str = 'spherical'  # distance metric used in triplet loss
     imitation_loss_weight: float = 1  # imitation loss weight
-    stabilization_loss_weight: float = 0 # 0.93  # stability loss weight
+    stabilization_loss_weight: float = 1  # 0.93  # stability loss weight
     boundary_loss_weight: float = 0  # boundary loss weight
     imitation_window_size: int = 5  # 15  # imitation window size
     stabilization_window_size: int = 2  # 6  # 2  # stability window size
