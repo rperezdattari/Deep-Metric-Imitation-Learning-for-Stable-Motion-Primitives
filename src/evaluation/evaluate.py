@@ -247,9 +247,9 @@ class Evaluate():
         self.metrics_sum = mean_RMSE + mean_DTWD + mean_FD
 
         # Append results to history
-        self.RMSE.append(mean_RMSE)
-        self.DTWD.append(mean_DTWD)
-        self.FD.append(mean_FD)
+        self.RMSE.append(RMSE)
+        self.DTWD.append(DTWD)
+        self.FD.append(FD)
 
         # Get results
         results = {'RMSE': mean_RMSE,
@@ -366,9 +366,9 @@ class Evaluate():
         """
 
         # Log metrics to tensorboard
-        writer.add_scalar('eval/RMSE', self.RMSE[-1], i)
-        writer.add_scalar('eval/DTWD', self.DTWD[-1], i)
-        writer.add_scalar('eval/FD', self.FD[-1], i)
+        writer.add_scalar('eval/RMSE', np.mean(self.RMSE[-1]), i)
+        writer.add_scalar('eval/DTWD', np.mean(self.DTWD[-1]), i)
+        writer.add_scalar('eval/FD', np.mean(self.FD[-1]), i)
         writer.add_scalar('eval/n_spurious', self.n_spurious[-1], i)
         writer.add_scalar('eval/mean_distance_to_goal', self.mean_distance_to_goal[-1], i)
 

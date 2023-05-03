@@ -45,7 +45,6 @@ class Params:
     max_iterations: int = 41000  # maximum number of training iterations
 
     """ Preprocessing """
-    spline_sample_type: str = 'from data'  # resample from spline type, options: from data, evenly spaced
     workspace_boundaries_type: str = 'custom'  # options: from data, custom
     workspace_boundaries: np.ndarray = np.array([[-1.0, 1.0],
                                                  [-1.0, 1.0],
@@ -54,6 +53,7 @@ class Params:
     state_increment: float = 0.3  # when workspace_boundaries_type = from data, percentage to increment state-space size
 
     """ Evaluation """
+    spline_sample_type: str = 'from data'  # resample from spline type, options: from data, evenly spaced
     save_evaluation: bool = True  # true to save evaluation results
     evaluation_interval: int = 1000  # interval between training iterations to evaluate model
     quanti_eval: bool = True  # quantitative evaluation
@@ -65,7 +65,7 @@ class Params:
     density: int = 35  # density^workspace_dimension = amount of points sampled from state space for evaluation
     simulated_trajectory_length: int = 2000  # integration length for evaluation
     evaluation_samples_length: int = 100  # integration steps skipped in quantitative evaluation for faster evaluation
-    show_plotly: bool = True  # show evaluation during training
+    show_plotly: bool = False  # show evaluation during training
 
     """ Hyperparameter Optimization """
     gamma_objective = 3.5  # weight for hyperparameter evaluation
