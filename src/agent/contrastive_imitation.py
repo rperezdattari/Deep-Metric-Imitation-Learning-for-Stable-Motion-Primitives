@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from agent.neural_network import NeuralNetwork
-from agent.utils.ranking_losses import TripletLoss, TripletAngleLoss, TripletCosineLoss, SoftTripletLoss
+from agent.utils.ranking_losses import TripletLoss, TripletAngleLoss, TripletCosineLoss, SoftTripletLoss, ContrastiveLoss
 from agent.dynamical_system import DynamicalSystem
 from agent.utils.dynamical_system_operations import normalize_state
 
@@ -20,6 +20,7 @@ class ContrastiveImitation:
         if params.space == 'sphere' or params.space == 'euclidean_sphere':
             self.dim_space += 1
         self.dim_state = self.dim_space * params.dynamical_system_order
+        self.stabilization_loss = params.stabilization_loss
         self.imitation_window_size = params.imitation_window_size
         self.batch_size = params.batch_size
         self.save_path = params.results_path

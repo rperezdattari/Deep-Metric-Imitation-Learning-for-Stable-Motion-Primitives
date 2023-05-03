@@ -23,8 +23,8 @@ class Params:
     latent_space_dim: int = 300  # dimensionality latent space
     neurons_hidden_layers: int = 300  # number of neurons per layer
     batch_size: int = 250  # sampling batch size
-    learning_rate: float = 0.00059  # AdamW learning rate
-    weight_decay: float = 0.0001  # AdamW weight decay
+    learning_rate: float = 0.00049  # AdamW learning rate
+    weight_decay: float = 0.0  # AdamW weight decay
 
     """ Contrastive Imitation """
     triplet_type: str = 'spherical'  # distance metric used in triplet loss
@@ -59,7 +59,7 @@ class Params:
     diffeo_quali_eval: bool = False  # qualitative evaluation of diffeomorphism mismatch
     ignore_n_spurious: bool = False  # when selecting best model, true to ignore amount of spurious attractors
     fixed_point_iteration_thr = 2  # distance threshold to consider that a point did not reach the goal
-    density: int = 16  # density^workspace_dimension = amount of points sampled from state space for evaluation
+    density: int = 35  # density^workspace_dimension = amount of points sampled from state space for evaluation
     simulated_trajectory_length: int = 2000  # integration length for evaluation
     evaluation_samples_length: int = 100  # integration steps skipped in quantitative evaluation for faster evaluation
     show_plot: bool = False  # show quanti eval
