@@ -23,6 +23,7 @@ def train(trial):
     # Initialize objective
     objective = 1e16
     params = Params(args.results_base_directory)
+    params.quali_eval = False
 
     # Generate optuna optimizers for hyperparemeter optimization
     if args.hyperparameter_optimization:
