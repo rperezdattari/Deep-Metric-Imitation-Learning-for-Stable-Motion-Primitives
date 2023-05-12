@@ -108,12 +108,12 @@ class DataPreprocessor:
                 min_single_trajectory.append(np.array(demonstrations_raw[j]).min(axis=1))
 
             # Get the max and min values along all of the trajectories
-            x_max = np.array(max_single_trajectory).max(axis=0)
-            x_min = np.array(min_single_trajectory).min(axis=0)
+            x_max_orig = np.array(max_single_trajectory).max(axis=0)
+            x_min_orig = np.array(min_single_trajectory).min(axis=0)
 
             # Add a tolerance
-            x_max = x_max + (x_max - x_min) * self.state_increment / 2
-            x_min = x_min - (x_max - x_min) * self.state_increment / 2
+            x_max = x_max_orig + (x_max_orig - x_min_orig) * self.state_increment / 2
+            x_min = x_min_orig - (x_max_orig - x_min_orig) * self.state_increment / 2
 
         elif self.workspace_boundaries_type == 'custom':
             # Use custom boundaries
@@ -310,17 +310,21 @@ class DataPreprocessor:
         max_velocity = np.max(velocity, axis=(0, 1, 3))
 
         # Compute max acceleration
-        if self.dynamical_system_order == 2:
+        if self.dynamical_system_order == 1:
+            min_acceleration = None  # acceleration not used in first-order systems
+            max_acceleration = None
+        elif self.dynamical_system_order == 2:
             min_acceleration = np.min(acceleration, axis=(0, 1, 3))
             max_acceleration = np.max(acceleration, axis=(0, 1, 3))
         else:
-            min_acceleration = min_velocity * 0  # TODO: remove this eventually, here becasue cluster weird error
-            max_acceleration = max_velocity * 0
+            raise ValueError('Selected dynamical system order not valid, options: 1, 2.')
 
         # If second order, since the velocity is part of the state, we extend its limits
         if self.dynamical_system_order == 2:
-            max_velocity = max_velocity + (max_velocity - min_velocity) * self.state_increment / 2
-            min_velocity = min_velocity - (max_velocity - min_velocity) * self.state_increment / 2
+            max_velocity_state = max_velocity + (max_velocity - min_velocity) * self.state_increment / 2
+            min_velocity_state = min_velocity - (max_velocity - min_velocity) * self.state_increment / 2
+            max_velocity = max_velocity_state
+            min_velocity = min_velocity_state
 
         # Collect
         limits = {'vel min train': min_velocity,

@@ -1,4 +1,4 @@
-from agent.utils.dynamical_system_operations import euler_integration, normalize_state, denormalize_state, get_derivative_normalized_state
+from agent.utils.dynamical_system_operations import denormalize_derivative, euler_integration, normalize_state, denormalize_state, get_derivative_normalized_state
 import torch
 import numpy as np
 
@@ -21,8 +21,11 @@ class DynamicalSystem():
         self.dim_manifold = dim_state // order
         self.min_vel = min_state_derivative[0]
         self.max_vel = max_state_derivative[0]
+        self.max_vel_norm = torch.max(-self.min_vel, self.max_vel)  # axes are treated independently
         self.min_acc = min_state_derivative[1]
         self.max_acc = max_state_derivative[1]
+        if self.min_acc is not None:
+            self.max_acc_norm = torch.max(-self.min_acc, self.max_acc)  # axes are treated independently
         self.delta_t = delta_t
         self.x_min = np.array(x_min)
         self.x_max = np.array(x_max)
@@ -40,6 +43,7 @@ class DynamicalSystem():
 
         # Init dynamical system state
         self.x_t_d = x_init
+        self.y_t = {'task': None, 'latent': None}
         self.y_t_d = self.get_latent_state(x_init)
 
     def get_latent_state(self, x_t=None, space='task'):
@@ -49,9 +53,11 @@ class DynamicalSystem():
         if space == 'task':
             # Map state to latent state (psi)
             y_t = self.model.encoder(x_t, self.primitive_type)
+            self.y_t['task'] = y_t
         elif space == 'latent':
             # Transition following f^{L}
             _, y_t = self.transition_latent_system()
+            self.y_t['latent'] = y_t
         else:
             raise ValueError('Selected transition space not valid, options: task, latent.')
 
@@ -90,9 +96,9 @@ class DynamicalSystem():
 
         # Denormalize velocity/acceleration
         if self.order == 1:
-            dx_t_d = denormalize_state(dx_t_d_normalized, self.min_vel, self.max_vel)
+            dx_t_d = denormalize_derivative(dx_t_d_normalized, self.max_vel_norm)
         elif self.order == 2:
-            dx_t_d = denormalize_state(dx_t_d_normalized, self.min_acc, self.max_acc)
+            dx_t_d = denormalize_derivative(dx_t_d_normalized, self.max_acc_norm)
         else:
             raise ValueError('Selected dynamical system order not valid, options: 1, 2.')
 
@@ -106,8 +112,7 @@ class DynamicalSystem():
         if self.saturate_transition:
             max_vel_t_d = (1 - x_t) / self.delta_t
             min_vel_t_d = (-1 - x_t) / self.delta_t
-            #vel_t_d = torch.clamp(vel_t_d, min_vel_t_d, max_vel_t_d)
-            vel_t_d = torch.max(torch.min(vel_t_d, max_vel_t_d), min_vel_t_d)  # TODO: rewritten for old cluster pytorch version
+            vel_t_d = torch.clamp(vel_t_d, min_vel_t_d, max_vel_t_d)
 
         # Integrate
         x_t_d = euler_integration(x_t, vel_t_d, self.delta_t)
@@ -134,14 +139,12 @@ class DynamicalSystem():
             # Position
             max_acc_t_d = (1 - pos_t - vel_t * self.delta_t) / self.delta_t**2
             min_acc_t_d = (-1 - pos_t - vel_t * self.delta_t) / self.delta_t**2
-            #acc_t_d = torch.clamp(acc_t_d, min_acc_t_d, max_acc_t_d)
-            acc_t_d = torch.max(torch.min(acc_t_d, max_acc_t_d), min_acc_t_d)  # TODO: rewritten for old cluster pytorch version
+            acc_t_d = torch.clamp(acc_t_d, min_acc_t_d, max_acc_t_d)
 
             # Velocity
             max_acc_t_d = (self.max_vel - vel_t) / self.delta_t
             min_acc_t_d = (self.min_vel - vel_t) / self.delta_t
-            #acc_t_d = torch.clamp(acc_t_d, min_acc_t_d, max_acc_t_d)
-            acc_t_d = torch.max(torch.min(acc_t_d, max_acc_t_d), min_acc_t_d)  # TODO: rewritten for old cluster pytorch version
+            acc_t_d = torch.clamp(acc_t_d, min_acc_t_d, max_acc_t_d)
 
         # Integrate
         vel_t_d = euler_integration(vel_t, acc_t_d, self.delta_t)
