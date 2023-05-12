@@ -108,12 +108,12 @@ class DataPreprocessor:
                 min_single_trajectory.append(np.array(demonstrations_raw[j]).min(axis=1))
 
             # Get the max and min values along all of the trajectories
-            x_max = np.array(max_single_trajectory).max(axis=0)
-            x_min = np.array(min_single_trajectory).min(axis=0)
+            x_max_orig = np.array(max_single_trajectory).max(axis=0)
+            x_min_orig = np.array(min_single_trajectory).min(axis=0)
 
             # Add a tolerance
-            x_max = x_max + (x_max - x_min) * self.state_increment / 2
-            x_min = x_min - (x_max - x_min) * self.state_increment / 2
+            x_max = x_max_orig + (x_max_orig - x_min_orig) * self.state_increment / 2
+            x_min = x_min_orig - (x_max_orig - x_min_orig) * self.state_increment / 2
 
         elif self.workspace_boundaries_type == 'custom':
             # Use custom boundaries
@@ -197,41 +197,56 @@ class DataPreprocessor:
         n_trajectories = len(demonstrations_raw)
         resampled_positions, error_acc = [], []
 
+        # Pad demonstrations
+        demonstrations_raw_padded = []
+        for i in range(features_demos['n demonstrations']):
+            padding_length = features_demos['max demonstration length'] - features_demos['demonstrations length'][i]
+            demonstrations_raw_padded.append(np.pad(demonstrations_raw[i], ((0, 0), (0, padding_length)), mode='edge'))
+        demonstrations_raw_padded = np.array(demonstrations_raw_padded)
+
         # Iterate through each demonstration
         for j in range(n_trajectories):
             if self.verbose:
                 print('Data preprocessing, demonstration %i / %i' % (j + 1, n_trajectories))
 
             # Get current trajectory
-            demo = np.array(demonstrations_raw[j]).T
+            demo = np.array(demonstrations_raw_padded[j]).T
             length_demo = demo.shape[0]
 
             # Normalize demos
             demo_norm = normalize_state(demo, x_min=features_demos['x min'], x_max=features_demos['x max'])
 
-            # Create phase array that spatially parametrizes demo in one dimension
-            curve_phase = 0
-            curve_phases, delta_phases = [curve_phase], []
+            if self.spline_sample_type == 'evenly spaced':
+                # Create phase array that spatially parametrizes demo in one dimension
+                curve_phase = 0
+                curve_phases, delta_phases = [curve_phase], []
 
-            for i in range(length_demo - 1):  # iterate through every point in trajectory and assign a phase value
-                # Compute phase increment based on distance of consecutive points
-                delta_phase = np.linalg.norm(demo_norm[i + 1, :] - demo_norm[i, :])
+                for i in range(length_demo - 1):  # iterate through every point in trajectory and assign a phase value
+                    # Compute phase increment based on distance of consecutive points
+                    delta_phase = np.linalg.norm(demo_norm[i + 1, :] - demo_norm[i, :])
 
-                if delta_phase == 0:
-                    # If points in trajectory have zero phase difference, splprep throws error -> add small margin
-                    delta_phase += 1e-15
+                    if delta_phase == 0:
+                        # If points in trajectory have zero phase difference, splprep throws error -> add small margin
+                        delta_phase += 1e-15
 
-                # Increment phase
-                curve_phase += delta_phase
+                    # Increment phase
+                    curve_phase += delta_phase
 
-                # Store phase and delta of current point in curve
-                curve_phases.append(curve_phase)
-                delta_phases.append(delta_phase)
+                    # Store phase and delta of current point in curve
+                    curve_phases.append(curve_phase)
+                    delta_phases.append(delta_phase)
 
-            delta_phases.append(0)  # zero delta for last point
-            curve_phases = np.array(curve_phases)
-            delta_phases = np.array(delta_phases)
-            max_phase = curve_phases[-1]
+                delta_phases.append(0)  # zero delta for last point
+                curve_phases = np.array(curve_phases)
+                delta_phases = np.array(delta_phases)
+                max_phase = curve_phases[-1]
+
+            elif self.spline_sample_type == 'from data' or self.spline_sample_type == 'from data resample':
+                curve_phases = np.arange(0, length_demo * self.delta_t, self.delta_t)
+                delta_phases = np.ones(length_demo) * self.delta_t  # TODO: could be extended to variable delta t
+                max_phase = np.max(curve_phases)
+            else:
+                raise NameError('Spline sample type not valid, check params file for options.')
 
             # Create input for spline: demonstrations and corresponding phases
             spline_input = []
@@ -241,10 +256,10 @@ class DataPreprocessor:
             spline_input.append(delta_phases)
 
             # Fit spline
-            spline_parameters, u = splprep(spline_input, s=0, k=1, u=curve_phases)  # s = 0 -> no smoothing; k = 1 -> linear interpolation
+            spline_parameters, _ = splprep(spline_input, s=0, k=1, u=curve_phases)  # s = 0 -> no smoothing; k = 1 -> linear interpolation
 
             # Create initial phases u with spatially equidistant points
-            if self.spline_sample_type == 'evenly spaced':
+            if self.spline_sample_type == 'evenly spaced' or self.spline_sample_type == 'from data resample':
                 u = np.linspace(0, max_phase, self.trajectories_resample_length)
             elif self.spline_sample_type == 'from data':
                 u = curve_phases
@@ -261,14 +276,14 @@ class DataPreprocessor:
                 # Append position to window trajectory
                 window.append(position_window)
 
-                # Find phase for next point in imitation window
+                # Find time/phase for next point in imitation window
                 delta_phase = spline_values[-1]
-                next_phase = u + delta_phase
-                u = np.clip(next_phase, a_min=0, a_max=max_phase)  # update phase
+                next_t = u + delta_phase
+                u = np.clip(next_t, a_min=0, a_max=max_phase)  # update phase
 
                 # Accumulate error for debugging
                 predicted_phase = splev(u, spline_parameters)[-2]
-                error_acc.append(np.mean(np.abs(predicted_phase - next_phase)))
+                error_acc.append(np.mean(np.abs(predicted_phase - u)))
 
             resampled_positions.append(window)
 
@@ -295,17 +310,21 @@ class DataPreprocessor:
         max_velocity = np.max(velocity, axis=(0, 1, 3))
 
         # Compute max acceleration
-        if self.dynamical_system_order == 2:
+        if self.dynamical_system_order == 1:
+            min_acceleration = None  # acceleration not used in first-order systems
+            max_acceleration = None
+        elif self.dynamical_system_order == 2:
             min_acceleration = np.min(acceleration, axis=(0, 1, 3))
             max_acceleration = np.max(acceleration, axis=(0, 1, 3))
         else:
-            min_acceleration = min_velocity * 0  # TODO: remove this eventually, here becasue cluster weird error
-            max_acceleration = max_velocity * 0
+            raise ValueError('Selected dynamical system order not valid, options: 1, 2.')
 
         # If second order, since the velocity is part of the state, we extend its limits
         if self.dynamical_system_order == 2:
-            max_velocity = max_velocity + (max_velocity - min_velocity) * self.state_increment / 2
-            min_velocity = min_velocity - (max_velocity - min_velocity) * self.state_increment / 2
+            max_velocity_state = max_velocity + (max_velocity - min_velocity) * self.state_increment / 2
+            min_velocity_state = min_velocity - (max_velocity - min_velocity) * self.state_increment / 2
+            max_velocity = max_velocity_state
+            min_velocity = min_velocity_state
 
         # Collect
         limits = {'vel min train': min_velocity,
