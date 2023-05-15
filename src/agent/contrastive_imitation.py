@@ -55,7 +55,7 @@ class ContrastiveImitation:
         else:
             min_acc = None
             max_acc = None
-
+        self.radius = None
         # Dynamical-system-only params
         self.params_dynamical_system = {'saturate transition': params.saturate_out_of_boundaries_transitions,
                                         'x min': data['x min'],
